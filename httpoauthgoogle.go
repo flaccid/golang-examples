@@ -48,7 +48,10 @@ var (
 	SessionStore  = sessions.NewCookieStore(encryptionKey)
 	app           = OAuthApp{
 		Config: oauth2.Config{
-			Scopes:   []string{"https://www.googleapis.com/auth/userinfo.email"},
+			Scopes: []string{
+				"https://www.googleapis.com/auth/userinfo.email",
+				"https://www.googleapis.com/auth/userinfo.profile",
+			},
 			Endpoint: google.Endpoint,
 		},
 	}
