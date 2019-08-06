@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -21,6 +22,12 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
 )
+
+// environment requirements
+// CLIENT_ID - oauth client id
+// CLIENT_SECRET - oauth client secret
+// REDIRECT_URL - redirect url (http://localhost:8080/oauth2callback)
+// TENANT_ID - Azure tenant id
 
 type OAuthApp struct {
 	Config   oauth2.Config
@@ -41,12 +48,13 @@ const (
 var (
 	letterRunes   = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	encryptionKey = []byte(securecookie.GenerateRandomKey(64))
-
-	Store = sessions.NewFilesystemStore(os.TempDir(), encryptionKey)
+	userInfo      []byte
+	Store         = sessions.NewFilesystemStore(os.TempDir(), encryptionKey)
 
 	App = OAuthApp{
 		Config: oauth2.Config{
-			Scopes: []string{"User.Read"},
+			Scopes: []string{"openid"},
+			//Scopes: []string{"User.Read"},
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
 				TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
@@ -81,6 +89,35 @@ func validateRedirectURL(path string) (string, error) {
 		return "/", errors.New("URL must not be absolute")
 	}
 	return path, nil
+}
+
+func getUserInfo(app OAuthApp, accessToken string) ([]byte, error) {
+	userInfoEndpoint := "https://login.microsoftonline.com/" + App.TenantId + "/openid/userinfo"
+
+	//url := userInfoEndpoint + "?access_token=" + accessToken
+
+	log.Debugf("fetch user info using ", userInfoEndpoint)
+	log.Debugf("access token: ", accessToken)
+
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", userInfoEndpoint, nil)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting user info: %s", err.Error())
+	}
+	defer response.Body.Close()
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed reading response body: %s", err.Error())
+	}
+
+	log.Debugf("userinfo response: ", response)
+
+	return contents, nil
 }
 
 func publicHandler(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +226,14 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debug("session values", session.Values)
 	log.Debug(session.Values["oauth_token"])
 
+	// get openid user info
+	userInfo, err = getUserInfo(App, tok.AccessToken)
+	if err != nil {
+		log.Error(err)
+	} else {
+		log.Debugf("user info: ", userInfo)
+	}
+
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
@@ -220,8 +265,8 @@ func main() {
 
 	// configure the application properties
 	App.Config.ClientID = os.Getenv("CLIENT_ID")
-	App.Config.RedirectURL = os.Getenv("REDIRECT_URL")
 	App.Config.ClientSecret = os.Getenv("CLIENT_SECRET")
+	App.Config.RedirectURL = os.Getenv("REDIRECT_URL")
 	App.TenantId = os.Getenv("TENANT_ID")
 	App.State = RandStringRunes(255)
 	// sessionStore.Options = &sessions.Options{
