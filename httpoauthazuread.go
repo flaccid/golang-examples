@@ -48,8 +48,9 @@ const (
 var (
 	letterRunes   = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	encryptionKey = []byte(securecookie.GenerateRandomKey(64))
-	userInfo      []byte
 	Store         = sessions.NewFilesystemStore(os.TempDir(), encryptionKey)
+	userInfo      []byte
+	token         *oauth2.Token
 
 	App = OAuthApp{
 		Config: oauth2.Config{
@@ -126,7 +127,7 @@ func getUserInfo(app OAuthApp, accessToken string) ([]byte, error) {
 }
 
 func publicHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "", "<html><body><p>This is a public page.</p><p><a href=\"/login\">login</a> | <a href=\"/logout\">logout</a></p></body></html>")
+	fmt.Fprint(w, "", "<html><body><p>This is a public page.</p><p><a href=\"/secret\">secret</a> | <a href=\"/profile\">profile</a> | <a href=\"/login\">login</a> | <a href=\"/logout\">logout</a></p></body></html>")
 }
 
 // logoutHandler clears the default session.
@@ -162,6 +163,28 @@ func secretHandler(w http.ResponseWriter, r *http.Request) {
 
 	// print secret message
 	fmt.Fprintln(w, "The cake is a lie!")
+}
+
+func profileHandler(w http.ResponseWriter, r *http.Request) {
+	session, err := Store.Get(r, defaultSessionID)
+	if err != nil {
+		log.Error(err, "could not get default session: %v", err)
+	}
+
+	log.Debug("session info", session)
+
+	// check if user is authenticated
+	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	userInfo, err = getUserInfo(App, token.AccessToken)
+	if err != nil {
+		log.Error(err)
+	} else {
+		fmt.Fprintln(w, string(userInfo))
+	}
 }
 
 func azureADLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +233,7 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := r.FormValue("code")
-	tok, err := App.Config.Exchange(context.Background(), code)
+	token, err = App.Config.Exchange(context.Background(), code)
 	if err != nil {
 		log.Error(err, "could not get auth token: %v", err)
 	}
@@ -220,7 +243,7 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		log.Error(err, "could not get default session: %v", err)
 	}
 
-	session.Values[oauthTokenSessionKey] = tok
+	session.Values[oauthTokenSessionKey] = token
 
 	// set user as authenticated
 	session.Values["authenticated"] = true
@@ -232,7 +255,7 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debug(session.Values["oauth_token"])
 
 	// get openid user info
-	userInfo, err = getUserInfo(App, tok.AccessToken)
+	userInfo, err = getUserInfo(App, token.AccessToken)
 	if err != nil {
 		log.Error(err)
 	} else {
@@ -247,6 +270,7 @@ func Serve() {
 	http.HandleFunc("/login", azureADLoginHandler)
 	http.HandleFunc("/logout", logoutHandler)
 	http.HandleFunc("/secret", secretHandler)
+	http.HandleFunc("/profile", profileHandler)
 	http.HandleFunc("/", publicHandler)
 	http.ListenAndServe(":8080", gcontext.ClearHandler(http.DefaultServeMux))
 }
