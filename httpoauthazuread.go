@@ -100,6 +100,7 @@ func getUserInfo(app OAuthApp, accessToken string) ([]byte, error) {
 	// https://stackoverflow.com/questions/49449654/how-do-i-get-the-logged-in-users-profile-for-azure-ad-oauth-logins
 	userInfoEndpoint := "https://graph.microsoft.com/v1.0/me"
 	// this oauth2 standard endpoint does not seem to work (returns http 400)
+	// it should work though: https://winsmarts.com/how-to-call-the-userinfo-endpoint-in-azuread-6ff769567a5a
 	// userInfoEndpoint := "https://login.microsoftonline.com/" + App.TenantId + "/openid/userinfo"
 
 	log.Debugf("fetch user info using ", userInfoEndpoint)
