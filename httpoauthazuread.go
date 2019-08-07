@@ -53,8 +53,12 @@ var (
 
 	App = OAuthApp{
 		Config: oauth2.Config{
-			Scopes: []string{"openid"},
-			//Scopes: []string{"User.Read"},
+			Scopes: []string{
+				"openid",
+				"profile",
+				"email",
+				"User.Read",
+			},
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
 				TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
@@ -92,9 +96,10 @@ func validateRedirectURL(path string) (string, error) {
 }
 
 func getUserInfo(app OAuthApp, accessToken string) ([]byte, error) {
-	userInfoEndpoint := "https://login.microsoftonline.com/" + App.TenantId + "/openid/userinfo"
-
-	//url := userInfoEndpoint + "?access_token=" + accessToken
+	// https://stackoverflow.com/questions/49449654/how-do-i-get-the-logged-in-users-profile-for-azure-ad-oauth-logins
+	userInfoEndpoint := "https://graph.microsoft.com/v1.0/me"
+	// this oauth2 standard endpoint does not seem to work (returns http 400)
+	// userInfoEndpoint := "https://login.microsoftonline.com/" + App.TenantId + "/openid/userinfo"
 
 	log.Debugf("fetch user info using ", userInfoEndpoint)
 	log.Debugf("access token: ", accessToken)
@@ -231,7 +236,7 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error(err)
 	} else {
-		log.Debugf("user info: ", userInfo)
+		log.Debugf("user info: ", string(userInfo))
 	}
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
