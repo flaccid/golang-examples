@@ -189,7 +189,8 @@ func profileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func azureADLoginHandler(w http.ResponseWriter, r *http.Request) {
-	sessionID := uuid.Must(uuid.NewV4()).String()
+	var err error
+	sessionID := uuid.Must(uuid.NewV4(), err).String()
 
 	oauthFlowSession, err := Store.New(r, sessionID)
 	if err != nil {
