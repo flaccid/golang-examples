@@ -268,12 +268,14 @@ func azureADCallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Serve() {
+	log.Debug("setting handlers")
 	http.HandleFunc("/oauth2callback", azureADCallbackHandler)
 	http.HandleFunc("/login", azureADLoginHandler)
 	http.HandleFunc("/logout", logoutHandler)
 	http.HandleFunc("/secret", secretHandler)
 	http.HandleFunc("/profile", profileHandler)
 	http.HandleFunc("/", publicHandler)
+	log.Debug("start server")
 	http.ListenAndServe(":8080", gcontext.ClearHandler(http.DefaultServeMux))
 }
 
